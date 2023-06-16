@@ -43,8 +43,8 @@ jobs:
     - name: Upload
       uses: actions/upload-artifact@v3
       with: 
-        name: rbtw
-        path: target/release/rbtw
+        name: disable-input
+        path: target/release/disable-input
 
     - name: get package version and tag.
       id: version_tag
@@ -59,11 +59,11 @@ jobs:
     - name: Download binaries
       uses: actions/download-artifact@v3
       with:
-        name: rbtw
+        name: disable-input
     - name: Release
       uses: "softprops/action-gh-release@v1"
       with:
         prerelease: true
         name: "x86 binary"
-        files: rbtw
+        files: disable-input
         tag_name: ${{needs.build.outputs.package_tag}}
