@@ -1,7 +1,9 @@
 use std::io::{BufRead, BufReader};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, ChildStderr, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 mod background_reader;
 use background_reader::BackgroundLineReader;
@@ -13,8 +15,9 @@ pub enum CommandError {
 }
 
 pub struct LockedDevice {
-    process: Child,
-    check_thread: JoinHandle<()>,
+    process: Arc<Mutex<Child>>,
+    stopping: Arc<AtomicBool>,
+    maintain_lock: JoinHandle<()>,
 }
 
 impl LockedDevice {
@@ -25,39 +28,67 @@ impl LockedDevice {
 
 impl Drop for LockedDevice {
     fn drop(&mut self) {
-        self.process.kill().unwrap();
+        self.stopping.store(true, Ordering::Relaxed);
+        self.process.lock().unwrap().kill().unwrap();
     }
 }
 
 impl Device {
     #[must_use]
     pub fn lock(self) -> Result<LockedDevice, CommandError> {
-        let mut process = Command::new("evtest")
-            .arg("--grab")
-            .arg(&self.event_path)
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(CommandError::Io)?;
+        let Self { event_path, .. } = self;
+        let (process, stderr) = lock_input(&event_path)?;
+        let process = Arc::new(Mutex::new(process));
+        let stopping = Arc::new(AtomicBool::new(false));
 
-        let stderr = process.stderr.take().unwrap();
-
-        let check_thread = thread::spawn(move || {
-            let reader = BufReader::new(stderr);
-            let mut error = Vec::new();
-            for line in reader.lines().take(5) {
-                let Ok(line) = line else {
-                panic!("Could not grab device\n\tstderr: {error:?}");
-            };
-                error.push(line);
-            }
-        });
+        let first_lock = Instant::now();
+        let maintain_lock = {
+            let process = process.clone();
+            let stopping = stopping.clone();
+            thread::spawn(move || {
+                let mut stderr = Some(stderr);
+                loop {
+                    let err = wait_for_stderr_end(stderr.take().unwrap());
+                    if stopping.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    if first_lock.elapsed() < Duration::from_secs(5) {
+                        panic!("{err}");
+                    }
+                    // todo figure out startup vs keyboard in/out error
+                    let (new_process, new_stderr) = lock_input(&event_path).unwrap();
+                    *process.lock().unwrap() = new_process;
+                    stderr = Some(new_stderr);
+                }
+            })
+        };
 
         Ok(LockedDevice {
             process,
-            check_thread,
+            maintain_lock,
+            stopping,
         })
     }
+}
 
+fn lock_input(event_path: &str) -> Result<(Child, ChildStderr), CommandError> {
+    let mut process = Command::new("evtest")
+        .arg("--grab")
+        .arg(event_path)
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(CommandError::Io)?;
+    let stderr = process.stderr.take().unwrap();
+    Ok((process, stderr))
+}
+
+fn wait_for_stderr_end(stderr: ChildStderr) -> String {
+    let reader = BufReader::new(stderr);
+    let mut error = Vec::new();
+    for line in reader.lines().take(5) {
+        error.push(line.unwrap());
+    }
+    error.as_slice().join("\n")
 }
 
 #[derive(Debug)]
