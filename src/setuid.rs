@@ -7,11 +7,8 @@ const OTHERS_EXECUTE: u32 = 0o0001;
 const OWNER_FREE: u32 = 0o0700;
 const GROUP_NO_PERM: u32 = 0o0000;
 
-const PERM: u32 = SETUID_BIT 
-    | OTHERS_READ 
-    | OTHERS_EXECUTE 
-    | OWNER_FREE 
-    | GROUP_NO_PERM;
+const PERM: u32 =
+    SETUID_BIT | OTHERS_READ | OTHERS_EXECUTE | OWNER_FREE | GROUP_NO_PERM;
 
 pub fn is_set() -> bool {
     let path = std::env::current_exe().unwrap();

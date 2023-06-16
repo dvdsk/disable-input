@@ -43,7 +43,7 @@ fn main() {
     let devices = input::list().unwrap();
     let mouse = devices
         .into_iter()
-        .find(|e| e.name.starts_with("Logitech MX"))
+        .find(|e| e.name.starts_with("USB Optical Mouse"))
         .unwrap();
     let locked = mouse.lock().unwrap();
 

@@ -1,4 +1,4 @@
-use std::io::{Read, BufReader, BufRead, self};
+use std::io::{self, BufRead, BufReader, Read};
 use std::sync::mpsc::{self, TryRecvError};
 use std::thread::{self, JoinHandle};
 
@@ -33,7 +33,9 @@ impl BackgroundLineReader {
             match self.lines.try_recv() {
                 Ok(Ok(line)) => lines.push(line),
                 Ok(Err(e)) => return Err(e),
-                Err(TryRecvError::Empty) | Err(TryRecvError::Disconnected) => return Ok(lines),
+                Err(TryRecvError::Empty) | Err(TryRecvError::Disconnected) => {
+                    return Ok(lines)
+                }
             }
         }
     }

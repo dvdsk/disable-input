@@ -35,6 +35,7 @@ impl Device {
         let mut process = Command::new("evtest")
             .arg("--grab")
             .arg(&self.event_path)
+            .stdout(Stdio::null())
             .stderr(Stdio::piped())
             .spawn()
             .map_err(CommandError::Io)?;
@@ -50,6 +51,9 @@ impl Device {
             };
                 error.push(line);
             }
+            if error.len() < 5 {
+                panic!("Could not grab device\n\tstderr: {error:?}");
+            }
         });
 
         Ok(LockedDevice {
@@ -57,12 +61,11 @@ impl Device {
             check_thread,
         })
     }
-
 }
 
 #[derive(Debug)]
 pub struct Device {
-    event_path: String,
+    pub event_path: String,
     pub name: String,
 }
 
