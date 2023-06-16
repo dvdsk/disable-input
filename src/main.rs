@@ -42,13 +42,19 @@ fn main() {
 
     let devices = input::list().unwrap();
     let mouse = devices
-        .into_iter()
+        .iter()
         .find(|e| e.name.starts_with("USB Optical Mouse"))
         .unwrap();
-    let locked = mouse.lock().unwrap();
+    let keyboard = devices
+        .iter()
+        .find(|e| e.name.starts_with("HID 046a:010d"))
+        .unwrap();
+    let locked_mouse = mouse.clone().lock().unwrap();
+    let locked_keyboard = keyboard.clone().lock().unwrap();
 
-    println!("unlocking in 20 seconds");
-    thread::sleep(Duration::from_secs(20));
+    println!("unlocking in 60 seconds");
+    thread::sleep(Duration::from_secs(60));
 
-    locked.unlock();
+    locked_mouse.unlock();
+    locked_keyboard.unlock();
 }

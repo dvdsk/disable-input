@@ -45,15 +45,13 @@ impl Device {
         let check_thread = thread::spawn(move || {
             let reader = BufReader::new(stderr);
             let mut error = Vec::new();
-            for line in reader.lines().take(5) {
+            for line in reader.lines() {
                 let Ok(line) = line else {
-                panic!("Could not grab device\n\tstderr: {error:?}");
-            };
+                    panic!("Could not grab device\n\tstderr: {error:?}");
+                };
                 error.push(line);
             }
-            if error.len() < 5 {
-                panic!("Could not grab device\n\tstderr: {error:?}");
-            }
+            panic!("Could not grab device\n\tstderr: {error:?}");
         });
 
         Ok(LockedDevice {
@@ -63,7 +61,7 @@ impl Device {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Device {
     pub event_path: String,
     pub name: String,
@@ -71,6 +69,7 @@ pub struct Device {
 
 pub fn list() -> Result<Vec<Device>, CommandError> {
     let mut handle = Command::new("evtest")
+        .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(CommandError::Io)?;
