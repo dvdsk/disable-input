@@ -1,31 +1,49 @@
 #![feature(unix_chown)]
+#![feature(iter_intersperse)]
+
+use clap::{Parser, Subcommand};
 
 use std::os::unix::fs::chown;
+use std::thread;
 use std::time::Duration;
-use std::{env, thread};
+
+use crate::input::Device;
 
 mod input;
 mod setuid;
 
-const ROOT: u32 = 0;
-const HELP: &str = "Usage: call with --lock to disable keyboard and mouse. \n
-call with --unlock to re-enable them.\n\n
-        - Requires sudo on its first run, will rerun with sudo when not provided. \n\
-        Options:\n    --help, -h    Print this help message\n";
+#[derive(Subcommand, Debug, Clone)]
+enum Commands {
+    /// list the devices that can be locked
+    List,
+    /// lock one or more devices
+    Lock {
+        /// duration to lock in seconds
+        seconds: u64,
+        /// names of the devices to lock (use list to get those), 
+        /// can be passed multiple times to lock multiple devices
+        to_lock: Vec<String>,
+    },
+}
+
+/// Disables keyboard and mouse input for some time
+/// Requires sudo on its first run, will rerun with sudo when not provided.
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    #[command(subcommand)]
+    command: Commands,
+}
 
 fn main() {
-    if let Some(arg) = env::args().nth(1) {
-        if arg == "--help" || arg == "-h" {
-            println!("{HELP}");
-            return;
-        }
-    }
+    let args = Args::parse();
 
     sudo::escalate_if_needed()
         .expect("sudo failed, you may also call this with sudo in front of it");
 
     let was_set = setuid::is_set();
 
+    const ROOT: u32 = 0;
     let path = std::env::current_exe().unwrap();
     chown(path, Some(ROOT), Some(ROOT)).unwrap();
     setuid::set();
@@ -41,20 +59,28 @@ fn main() {
     }
 
     let devices = input::list().unwrap();
-    let mouse = devices
-        .iter()
-        .find(|e| e.name.starts_with("USB Optical Mouse"))
-        .unwrap();
-    let keyboard = devices
-        .iter()
-        .find(|e| e.name.starts_with("HID 046a:010d"))
-        .unwrap();
-    let locked_mouse = mouse.clone().lock().unwrap();
-    let locked_keyboard = keyboard.clone().lock().unwrap();
+    let (seconds, to_lock) = match args.command {
+        Commands::List => {
+            let list: String = devices
+                .iter()
+                .map(|d| d.name.as_str())
+                .intersperse("\n")
+                .collect();
+            println!("devices:\n{list}");
+            return;
+        }
+        Commands::Lock { seconds, to_lock } => (seconds, to_lock),
+    };
 
-    println!("unlocking in 60 seconds");
-    thread::sleep(Duration::from_secs(60));
+    let _locked: Vec<_> = devices
+        .into_iter()
+        .filter(|d| to_lock.contains(&d.name))
+        .map(Device::lock)
+        .collect::<Result<_, _>>()
+        .unwrap();
 
-    locked_mouse.unlock();
-    locked_keyboard.unlock();
+    println!("unlocking in {seconds} seconds");
+    thread::sleep(Duration::from_secs(seconds));
+
+    // locked is dropped here unlocking all devices
 }

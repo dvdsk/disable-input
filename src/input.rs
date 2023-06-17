@@ -75,6 +75,7 @@ fn lock_input(event_path: &str) -> Result<(Child, ChildStderr), CommandError> {
     let mut process = Command::new("evtest")
         .arg("--grab")
         .arg(event_path)
+        .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(CommandError::Io)?;
