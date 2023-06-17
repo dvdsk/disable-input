@@ -20,7 +20,7 @@ enum Commands {
     Lock {
         /// duration to lock in seconds
         seconds: u64,
-        /// names of the devices to lock (use list to get those), 
+        /// names of the devices to lock (use list to get those),
         /// can be passed multiple times to lock multiple devices
         to_lock: Vec<String>,
     },
@@ -72,9 +72,14 @@ fn main() {
         Commands::Lock { seconds, to_lock } => (seconds, to_lock),
     };
 
-    let _locked: Vec<_> = devices
+    let mut to_lock: Vec<_> = devices
         .into_iter()
         .filter(|d| to_lock.contains(&d.name))
+        .collect();
+    to_lock.dedup_by_key(|d| d.event_path.clone());
+
+    let _locked: Vec<_> = to_lock
+        .into_iter()
         .map(Device::lock)
         .collect::<Result<_, _>>()
         .unwrap();
