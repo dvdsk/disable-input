@@ -61,7 +61,7 @@ jobs:
       with:
         name: disable-input
     - name: Release
-      uses: "softprops/action-gh-release@v1"
+      uses: "softprops/action-gh-release@v2"
       with:
         prerelease: true
         name: "x86 binary"
